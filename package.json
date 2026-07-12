@@ -5,7 +5,7 @@
   "main": "dist/server/server.js",
   "type": "module",
   "scripts": {
-    "start": "tsx server/server.ts",
+    "start": "node dist/server/server.js",
     "build:client": "tsc -p client/tsconfig.json",
     "build:server": "tsc -p tsconfig.json",
     "build": "npm run build:client && npm run build:server",
