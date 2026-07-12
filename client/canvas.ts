@@ -96,6 +96,8 @@ export class CanvasManager {
             return;
         }
         
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        
         this.isDrawing = true;
         const worldPt = this.toWorld({ x: e.clientX, y: e.clientY });
         
@@ -257,9 +259,16 @@ export class CanvasManager {
         ctx.lineJoin = 'round';
         
         ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        
+        if (stroke.points.length === 1) {
+            // Draw a micro-line to ensure single-click dots are visible
+            ctx.lineTo(stroke.points[0].x, stroke.points[0].y + 0.001);
+        } else {
+            for (let i = 1; i < stroke.points.length; i++) {
+                ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            }
         }
+        
         ctx.stroke();
     }
     

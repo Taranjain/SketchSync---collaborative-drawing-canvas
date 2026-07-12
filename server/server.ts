@@ -70,6 +70,7 @@ wss.on('connection', (ws: WebSocket) => {
                     
                     defaultRoom.broadcast({
                         type: 'draw-end',
+                        userId: userId,
                         stroke: stroke
                     }, userId);
                     break;
