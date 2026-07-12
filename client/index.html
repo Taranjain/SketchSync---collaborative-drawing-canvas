@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SketchSync Collaborative Canvas</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="light-theme">
+    <!-- Join Overlay -->
+    <div id="join-overlay" class="overlay">
+        <div class="overlay-card glass">
+            <h1>🎨 SketchSync</h1>
+            <p>Collaborative Drawing in Real-Time</p>
+            <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
+            <button id="join-btn">Join Canvas</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="sidebar-header">
+                <h2>Users</h2>
+                <div id="connection-status" class="status connected" title="Connected"></div>
+            </div>
+            <ul id="user-list">
+                <!-- User items injected here -->
+            </ul>
+        </aside>
+
+        <!-- Main Canvas Area -->
+        <main class="canvas-container">
+            <!-- Double buffering: static canvas for history, dynamic canvas for active strokes/cursors -->
+            <canvas id="static-canvas"></canvas>
+            <canvas id="dynamic-canvas"></canvas>
+        </main>
+
+        <!-- Toolbar -->
+        <div class="toolbar glass">
+            <div class="tool-group">
+                <button class="tool-btn active" id="tool-brush" title="Brush">🖌️</button>
+                <button class="tool-btn" id="tool-eraser" title="Eraser">🧹</button>
+            </div>
+            
+            <div class="tool-group">
+                <input type="color" id="color-picker" value="#000000" title="Color">
+                <input type="range" id="width-slider" min="1" max="50" value="5" title="Stroke Width">
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" id="btn-undo" title="Undo Last Stroke (Global)">↩️</button>
+                <button class="tool-btn" id="btn-redo" title="Redo (Global)">↪️</button>
+                <button class="tool-btn" id="btn-clear" title="Clear Canvas">🗑️</button>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" id="btn-zoom-out" title="Zoom Out">🔍-</button>
+                <button class="tool-btn" id="btn-zoom-reset" title="Reset Zoom/Pan">1:1</button>
+                <button class="tool-btn" id="btn-zoom-in" title="Zoom In">🔍+</button>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" id="theme-toggle" title="Toggle Theme">🌙</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load the compiled TS entry point as a native ES module -->
+    <script type="module" src="dist/main.js"></script>
+</body>
+</html>

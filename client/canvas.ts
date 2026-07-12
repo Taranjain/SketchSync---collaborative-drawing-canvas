@@ -1,0 +1,309 @@
+// client/canvas.ts
+import { SocketManager } from './websocket.js';
+
+export interface Point { x: number; y: number; }
+export type Tool = 'brush' | 'eraser';
+
+export interface Stroke {
+    id: string;
+    userId: string;
+    tool: Tool;
+    color: string;
+    width: number;
+    points: Point[];
+}
+
+export class CanvasManager {
+    private staticCtx: CanvasRenderingContext2D;
+    private dynamicCtx: CanvasRenderingContext2D;
+    
+    private width = 0;
+    private height = 0;
+    
+    private scale = 1;
+    private offsetX = 0;
+    private offsetY = 0;
+    
+    private isDrawing = false;
+    private isPanning = false;
+    private lastPanPoint: Point | null = null;
+    private currentStroke: Stroke | null = null;
+    
+    private history: Stroke[] = [];
+    private activeRemoteStrokes = new Map<string, Stroke>();
+    private remoteCursors = new Map<string, Point>();
+    public users = new Map<string, any>();
+    
+    public activeTool: Tool = 'brush';
+    public activeColor: string = '#000000';
+    public activeWidth: number = 5;
+    public myUserId: string = '';
+    
+    constructor(
+        private staticCanvas: HTMLCanvasElement,
+        private dynamicCanvas: HTMLCanvasElement,
+        private socket: SocketManager
+    ) {
+        this.staticCtx = this.staticCanvas.getContext('2d', { alpha: false })!;
+        this.dynamicCtx = this.dynamicCanvas.getContext('2d')!;
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        this.setupEvents();
+        this.startRenderLoop();
+    }
+    
+    private resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        
+        this.staticCanvas.width = this.width;
+        this.staticCanvas.height = this.height;
+        this.dynamicCanvas.width = this.width;
+        this.dynamicCanvas.height = this.height;
+        
+        this.redrawStaticCanvas();
+    }
+    
+    private toWorld(screenPoint: Point): Point {
+        return {
+            x: (screenPoint.x - this.offsetX) / this.scale,
+            y: (screenPoint.y - this.offsetY) / this.scale
+        };
+    }
+    
+    private applyTransform(ctx: CanvasRenderingContext2D) {
+        ctx.setTransform(this.scale, 0, 0, this.scale, this.offsetX, this.offsetY);
+    }
+    
+    private setupEvents() {
+        const el = this.dynamicCanvas;
+        
+        el.addEventListener('pointerdown', this.onPointerDown.bind(this));
+        el.addEventListener('pointermove', this.onPointerMove.bind(this));
+        el.addEventListener('pointerup', this.onPointerUp.bind(this));
+        el.addEventListener('pointercancel', this.onPointerUp.bind(this));
+        
+        el.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+        el.addEventListener('contextmenu', e => e.preventDefault());
+    }
+    
+    private onPointerDown(e: PointerEvent) {
+        if (e.button === 1 || e.button === 2 || e.shiftKey) {
+            this.isPanning = true;
+            this.lastPanPoint = { x: e.clientX, y: e.clientY };
+            return;
+        }
+        
+        this.isDrawing = true;
+        const worldPt = this.toWorld({ x: e.clientX, y: e.clientY });
+        
+        this.currentStroke = {
+            id: Math.random().toString(36).substr(2, 9),
+            userId: this.myUserId,
+            tool: this.activeTool,
+            color: this.activeTool === 'eraser' ? '#ffffff' : this.activeColor,
+            width: this.activeWidth,
+            points: [worldPt]
+        };
+        
+        this.socket.send({ type: 'draw-start', stroke: this.currentStroke });
+    }
+    
+    private onPointerMove(e: PointerEvent) {
+        if (this.isPanning && this.lastPanPoint) {
+            const dx = e.clientX - this.lastPanPoint.x;
+            const dy = e.clientY - this.lastPanPoint.y;
+            this.offsetX += dx;
+            this.offsetY += dy;
+            this.lastPanPoint = { x: e.clientX, y: e.clientY };
+            this.redrawStaticCanvas();
+            return;
+        }
+        
+        const worldPt = this.toWorld({ x: e.clientX, y: e.clientY });
+        
+        if (this.isDrawing && this.currentStroke) {
+            this.currentStroke.points.push(worldPt);
+            this.socket.send({ type: 'draw-move', point: worldPt, strokeId: this.currentStroke.id });
+        } else {
+            this.socket.send({ type: 'cursor-move', point: worldPt });
+        }
+    }
+    
+    private onPointerUp(e: PointerEvent) {
+        if (this.isPanning) {
+            this.isPanning = false;
+            return;
+        }
+        
+        if (this.isDrawing && this.currentStroke) {
+            this.isDrawing = false;
+            this.history.push(this.currentStroke);
+            this.socket.send({ type: 'draw-end', stroke: this.currentStroke });
+            this.renderStroke(this.staticCtx, this.currentStroke);
+            this.currentStroke = null;
+        }
+    }
+    
+    private onWheel(e: WheelEvent) {
+        e.preventDefault();
+        
+        if (e.ctrlKey || e.metaKey) {
+            const zoomSensitivity = 0.001;
+            const delta = -e.deltaY * zoomSensitivity;
+            const newScale = Math.min(Math.max(0.1, this.scale + delta), 5);
+            
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            this.offsetX = mouseX - (mouseX - this.offsetX) * (newScale / this.scale);
+            this.offsetY = mouseY - (mouseY - this.offsetY) * (newScale / this.scale);
+            this.scale = newScale;
+            
+            this.redrawStaticCanvas();
+        } else {
+            this.offsetX -= e.deltaX;
+            this.offsetY -= e.deltaY;
+            this.redrawStaticCanvas();
+        }
+    }
+    
+    public setZoom(zoomIn: boolean) {
+        const factor = zoomIn ? 1.2 : 0.8;
+        const newScale = Math.min(Math.max(0.1, this.scale * factor), 5);
+        
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        this.offsetX = centerX - (centerX - this.offsetX) * (newScale / this.scale);
+        this.offsetY = centerY - (centerY - this.offsetY) * (newScale / this.scale);
+        this.scale = newScale;
+        
+        this.redrawStaticCanvas();
+    }
+    
+    public resetZoom() {
+        this.scale = 1;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.redrawStaticCanvas();
+    }
+    
+    public setHistory(history: Stroke[]) {
+        this.history = history;
+        this.redrawStaticCanvas();
+    }
+    
+    public addRemoteStrokeStart(userId: string, stroke: Stroke) {
+        this.activeRemoteStrokes.set(userId, stroke);
+    }
+    
+    public updateRemoteStroke(userId: string, strokeId: string, point: Point) {
+        const stroke = this.activeRemoteStrokes.get(userId);
+        if (stroke && stroke.id === strokeId) {
+            stroke.points.push(point);
+        }
+    }
+    
+    public finishRemoteStroke(userId: string, stroke: Stroke) {
+        this.activeRemoteStrokes.delete(userId);
+        this.history.push(stroke);
+        this.renderStroke(this.staticCtx, stroke);
+    }
+    
+    public updateRemoteCursor(userId: string, point: Point) {
+        this.remoteCursors.set(userId, point);
+    }
+    
+    public removeRemoteUser(userId: string) {
+        this.activeRemoteStrokes.delete(userId);
+        this.remoteCursors.delete(userId);
+        this.users.delete(userId);
+    }
+    
+    public removeStroke(strokeId: string) {
+        this.history = this.history.filter(s => s.id !== strokeId);
+        this.redrawStaticCanvas();
+    }
+    
+    public addStrokeHistory(stroke: Stroke) {
+        this.history.push(stroke);
+        this.redrawStaticCanvas();
+    }
+    
+    public redrawStaticCanvas() {
+        const bgColor = getComputedStyle(document.body).getPropertyValue('--canvas-bg').trim() || '#ffffff';
+        
+        this.staticCtx.setTransform(1, 0, 0, 1, 0, 0);
+        this.staticCtx.fillStyle = bgColor;
+        this.staticCtx.fillRect(0, 0, this.width, this.height);
+        
+        this.applyTransform(this.staticCtx);
+        for (const stroke of this.history) {
+            this.renderStroke(this.staticCtx, stroke);
+        }
+    }
+    
+    private renderStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
+        if (stroke.points.length === 0) return;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.tool === 'eraser' ? 
+            getComputedStyle(document.body).getPropertyValue('--canvas-bg').trim() : 
+            stroke.color;
+        ctx.lineWidth = stroke.width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+    }
+    
+    private startRenderLoop() {
+        const render = () => {
+            this.dynamicCtx.clearRect(0, 0, this.width, this.height);
+            
+            this.applyTransform(this.dynamicCtx);
+            
+            if (this.isDrawing && this.currentStroke) {
+                this.renderStroke(this.dynamicCtx, this.currentStroke);
+            }
+            
+            for (const stroke of this.activeRemoteStrokes.values()) {
+                this.renderStroke(this.dynamicCtx, stroke);
+            }
+            
+            this.dynamicCtx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            for (const [userId, point] of this.remoteCursors.entries()) {
+                const user = this.users.get(userId);
+                if (!user) continue;
+                
+                const screenX = point.x * this.scale + this.offsetX;
+                const screenY = point.y * this.scale + this.offsetY;
+                
+                this.dynamicCtx.beginPath();
+                this.dynamicCtx.fillStyle = user.color;
+                this.dynamicCtx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+                this.dynamicCtx.fill();
+                this.dynamicCtx.strokeStyle = '#fff';
+                this.dynamicCtx.lineWidth = 1;
+                this.dynamicCtx.stroke();
+                
+                this.dynamicCtx.font = '12px Inter, sans-serif';
+                const textWidth = this.dynamicCtx.measureText(user.name).width;
+                this.dynamicCtx.fillStyle = user.color;
+                this.dynamicCtx.fillRect(screenX + 10, screenY, textWidth + 10, 20);
+                this.dynamicCtx.fillStyle = '#fff';
+                this.dynamicCtx.fillText(user.name, screenX + 15, screenY + 14);
+            }
+            
+            requestAnimationFrame(render);
+        };
+        requestAnimationFrame(render);
+    }
+}

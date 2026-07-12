@@ -1,0 +1,243 @@
+:root {
+    /* Light Theme Variables */
+    --bg-color: #f0f2f5;
+    --canvas-bg: #ffffff;
+    --text-color: #333333;
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --accent: #4a90e2;
+    --hover-bg: rgba(0, 0, 0, 0.05);
+}
+
+body.dark-theme {
+    /* Dark Theme Variables */
+    --bg-color: #1a1a1a;
+    --canvas-bg: #222222;
+    --text-color: #eeeeee;
+    --glass-bg: rgba(40, 40, 40, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --accent: #64b5f6;
+    --hover-bg: rgba(255, 255, 255, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden; /* Canvas handles zoom/pan, no body scroll */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* UI Elements */
+.glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Join Overlay */
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.overlay-card {
+    padding: 2.5rem;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+}
+
+.overlay-card input {
+    padding: 0.8rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    outline: none;
+}
+.overlay-card input:focus { border-color: var(--accent); }
+
+.overlay-card button {
+    padding: 0.8rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: transform 0.1s, filter 0.2s;
+}
+.overlay-card button:hover { filter: brightness(1.1); }
+.overlay-card button:active { transform: scale(0.98); }
+
+/* App Layout */
+#app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    height: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--glass-border);
+    transition: transform 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    /* Hide sidebar on small screens or make it a drawer */
+    .sidebar { transform: translateX(-100%); }
+    .toolbar { width: 90%; flex-wrap: wrap; justify-content: center; bottom: 10px; gap: 0.5rem; }
+    .tool-group { padding-right: 0.5rem; gap: 0.2rem; }
+    .tool-btn { font-size: 1rem; }
+}
+
+.sidebar-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.status {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    box-shadow: 0 0 5px currentColor;
+}
+.status.connected { background-color: #4CAF50; color: #4CAF50; }
+.status.disconnected { background-color: #F44336; color: #F44336; }
+
+#user-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.user-item {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--glass-border);
+    font-weight: 500;
+}
+.user-color {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Toolbar */
+.toolbar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.tool-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.tool-group:not(:last-child) {
+    border-right: 1px solid var(--glass-border);
+    padding-right: 1.5rem;
+}
+
+.tool-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.25rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background 0.2s, transform 0.1s;
+}
+
+.tool-btn:hover { background: var(--hover-bg); }
+.tool-btn:active { transform: scale(0.95); }
+.tool-btn.active { background: var(--accent); color: white; }
+
+input[type="color"] {
+    -webkit-appearance: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 6px; box-shadow: 0 0 2px rgba(0,0,0,0.3); }
+
+input[type="range"] {
+    accent-color: var(--accent);
+}
+
+/* Canvas Container */
+.canvas-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--canvas-bg);
+    overflow: hidden;
+}
+
+/* Important: touch-action none allows us to capture all touch gestures natively 
+   without the browser interfering with pull-to-refresh or native zoom */
+canvas {
+    position: absolute;
+    top: 0; left: 0;
+    touch-action: none;
+}
+
+/* Dynamic canvas should be on top */
+#dynamic-canvas {
+    z-index: 2;
+    pointer-events: all; 
+}
+#static-canvas {
+    z-index: 1;
+    pointer-events: none; /* Let dynamic canvas handle all events */
+}
