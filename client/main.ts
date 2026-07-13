@@ -24,6 +24,9 @@ const btnZoomIn = document.getElementById('btn-zoom-in')!;
 const btnZoomOut = document.getElementById('btn-zoom-out')!;
 const btnZoomReset = document.getElementById('btn-zoom-reset')!;
 
+const eraserOptions = document.getElementById('eraser-options')!;
+const eraserModeToggle = document.getElementById('eraser-mode-toggle') as HTMLInputElement;
+
 const socket = new SocketManager();
 const canvas = new CanvasManager(staticCanvas, dynamicCanvas, socket);
 
@@ -49,12 +52,20 @@ function setupToolbar() {
         canvas.activeTool = 'brush';
         toolBrush.classList.add('active');
         toolEraser.classList.remove('active');
+        eraserOptions.classList.add('hidden');
     });
 
     toolEraser.addEventListener('click', () => {
-        canvas.activeTool = 'eraser';
+        canvas.activeTool = eraserModeToggle.checked ? 'stroke-eraser' : 'eraser';
         toolEraser.classList.add('active');
         toolBrush.classList.remove('active');
+        eraserOptions.classList.remove('hidden');
+    });
+    
+    eraserModeToggle.addEventListener('change', () => {
+        if (toolEraser.classList.contains('active')) {
+            canvas.activeTool = eraserModeToggle.checked ? 'stroke-eraser' : 'eraser';
+        }
     });
 
     colorPicker.addEventListener('input', (e) => {
@@ -128,6 +139,10 @@ function setupSocketEvents() {
                 
             case 'redo-event':
                 canvas.addStrokeHistory(msg.stroke);
+                break;
+                
+            case 'erase-stroke-event':
+                canvas.removeStroke(msg.strokeId);
                 break;
                 
             case 'clear-event':

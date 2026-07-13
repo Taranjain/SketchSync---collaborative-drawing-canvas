@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SketchSync Collaborative Canvas</title>
+    <title>SketchSync</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="light-theme">
@@ -40,8 +41,26 @@
         <!-- Toolbar -->
         <div class="toolbar glass">
             <div class="tool-group">
-                <button class="tool-btn active" id="tool-brush" title="Brush">🖌️</button>
-                <button class="tool-btn" id="tool-eraser" title="Eraser">🧹</button>
+                <button class="tool-btn active" id="tool-brush" title="Brush">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+                <button class="tool-btn" id="tool-eraser" title="Eraser">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 21H7l-4-4c-.5-.5-.5-1.5 0-2l10-10c.5-.5 1.5-.5 2 0l5 5c.5.5.5 1.5 0 2l-9 9H21v-2z" />
+                        <path d="M17 7l-8 8" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="tool-group hidden" id="eraser-options">
+                <label class="switch-label">
+                    <span>Pixel</span>
+                    <label class="switch">
+                        <input type="checkbox" id="eraser-mode-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span>Stroke</span>
+                </label>
             </div>
             
             <div class="tool-group">
@@ -50,19 +69,33 @@
             </div>
 
             <div class="tool-group">
-                <button class="tool-btn" id="btn-undo" title="Undo Last Stroke (Global)">↩️</button>
-                <button class="tool-btn" id="btn-redo" title="Redo (Global)">↪️</button>
-                <button class="tool-btn" id="btn-clear" title="Clear Canvas">🗑️</button>
+                <button class="tool-btn" id="btn-undo" title="Undo Last Stroke (Global)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                </button>
+                <button class="tool-btn" id="btn-redo" title="Redo (Global)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" /></svg>
+                </button>
+                <button class="tool-btn" id="btn-clear" title="Clear Canvas">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
             </div>
 
             <div class="tool-group">
-                <button class="tool-btn" id="btn-zoom-out" title="Zoom Out">🔍-</button>
-                <button class="tool-btn" id="btn-zoom-reset" title="Reset Zoom/Pan">1:1</button>
-                <button class="tool-btn" id="btn-zoom-in" title="Zoom In">🔍+</button>
+                <button class="tool-btn" id="btn-zoom-out" title="Zoom Out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" /></svg>
+                </button>
+                <button class="tool-btn" id="btn-zoom-reset" title="Reset Zoom/Pan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                </button>
+                <button class="tool-btn" id="btn-zoom-in" title="Zoom In">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                </button>
             </div>
 
             <div class="tool-group">
-                <button class="tool-btn" id="theme-toggle" title="Toggle Theme">🌙</button>
+                <button class="tool-btn" id="theme-toggle" title="Toggle Theme">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
             </div>
         </div>
     </div>

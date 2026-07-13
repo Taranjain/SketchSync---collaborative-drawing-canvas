@@ -109,6 +109,18 @@ wss.on('connection', (ws: WebSocket) => {
                     ws.send(JSON.stringify(clearMsg));
                     break;
                 }
+                
+                case 'erase-stroke': {
+                    const strokeId = data.strokeId;
+                    if (strokeId) {
+                        defaultRoom.drawingState.removeStroke(strokeId);
+                        defaultRoom.broadcast({
+                            type: 'erase-stroke-event',
+                            strokeId: strokeId
+                        }, userId);
+                    }
+                    break;
+                }
             }
         } catch (e) {
             console.error("Failed to parse or process WebSocket message", e);

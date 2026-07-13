@@ -1,6 +1,6 @@
 // server/drawing-state.ts
 
-export type Tool = 'brush' | 'eraser';
+export type Tool = 'brush' | 'eraser' | 'stroke-eraser';
 
 export interface Point {
     x: number;
@@ -25,6 +25,10 @@ export class DrawingState {
     addStroke(stroke: Stroke) {
         this.activeStrokes.push(stroke);
         this.redoStack = []; 
+    }
+    
+    removeStroke(strokeId: string) {
+        this.activeStrokes = this.activeStrokes.filter(s => s.id !== strokeId);
     }
     
     undo(): Stroke |null {

@@ -2,7 +2,7 @@
 import { SocketManager } from './websocket.js';
 
 export interface Point { x: number; y: number; }
-export type Tool = 'brush' | 'eraser';
+export type Tool = 'brush' | 'eraser' | 'stroke-eraser';
 
 export interface Stroke {
     id: string;
@@ -101,6 +101,12 @@ export class CanvasManager {
         this.isDrawing = true;
         const worldPt = this.toWorld({ x: e.clientX, y: e.clientY });
         
+        if (this.activeTool === 'stroke-eraser') {
+            this.isDrawing = true;
+            this.checkErase(worldPt);
+            return;
+        }
+        
         this.currentStroke = {
             id: Math.random().toString(36).substr(2, 9),
             userId: this.myUserId,
@@ -126,9 +132,13 @@ export class CanvasManager {
         
         const worldPt = this.toWorld({ x: e.clientX, y: e.clientY });
         
-        if (this.isDrawing && this.currentStroke) {
-            this.currentStroke.points.push(worldPt);
-            this.socket.send({ type: 'draw-move', point: worldPt, strokeId: this.currentStroke.id });
+        if (this.isDrawing) {
+            if (this.activeTool === 'stroke-eraser') {
+                this.checkErase(worldPt);
+            } else if (this.currentStroke) {
+                this.currentStroke.points.push(worldPt);
+                this.socket.send({ type: 'draw-move', point: worldPt, strokeId: this.currentStroke.id });
+            }
         } else {
             this.socket.send({ type: 'cursor-move', point: worldPt });
         }
@@ -140,12 +150,61 @@ export class CanvasManager {
             return;
         }
         
-        if (this.isDrawing && this.currentStroke) {
+        if (this.isDrawing) {
             this.isDrawing = false;
-            this.history.push(this.currentStroke);
-            this.socket.send({ type: 'draw-end', stroke: this.currentStroke });
-            this.renderStroke(this.staticCtx, this.currentStroke);
-            this.currentStroke = null;
+            
+            if (this.activeTool !== 'stroke-eraser' && this.currentStroke) {
+                this.history.push(this.currentStroke);
+                this.socket.send({ type: 'draw-end', stroke: this.currentStroke });
+                this.renderStroke(this.staticCtx, this.currentStroke);
+                this.currentStroke = null;
+            }
+        }
+    }
+    
+    private distToSegmentSquared(p: Point, v: Point, w: Point) {
+        const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
+        if (l2 === 0) return (p.x - v.x) ** 2 + (p.y - v.y) ** 2;
+        let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return (p.x - (v.x + t * (w.x - v.x))) ** 2 + (p.y - (v.y + t * (w.y - v.y))) ** 2;
+    }
+
+    private checkErase(worldPt: Point) {
+        const threshold = this.activeWidth / 2; 
+        let erased = false;
+        
+        for (let i = this.history.length - 1; i >= 0; i--) {
+            const stroke = this.history[i];
+            const strokeThreshold = (stroke.width / 2) + threshold;
+            const strokeThresholdSq = strokeThreshold * strokeThreshold;
+            
+            let hit = false;
+            if (stroke.points.length === 1) {
+                const p = stroke.points[0];
+                const distSq = (worldPt.x - p.x)**2 + (worldPt.y - p.y)**2;
+                if (distSq <= strokeThresholdSq) hit = true;
+            } else {
+                for (let j = 0; j < stroke.points.length - 1; j++) {
+                    const p1 = stroke.points[j];
+                    const p2 = stroke.points[j+1];
+                    const distSq = this.distToSegmentSquared(worldPt, p1, p2);
+                    if (distSq <= strokeThresholdSq) {
+                        hit = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (hit) {
+                this.history.splice(i, 1);
+                this.socket.send({ type: 'erase-stroke', strokeId: stroke.id });
+                erased = true;
+            }
+        }
+        
+        if (erased) {
+            this.redrawStaticCanvas();
         }
     }
     
