@@ -14,7 +14,16 @@
             <h1>🎨 SketchSync</h1>
             <p>Collaborative Drawing in Real-Time</p>
             <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
-            <button id="join-btn">Join Canvas</button>
+            
+            <div class="room-options">
+                <button id="btn-public-a" class="room-btn">Join Public Room A</button>
+                <button id="btn-public-b" class="room-btn">Join Public Room B</button>
+                
+                <div class="private-room-container">
+                    <input type="text" id="private-room-input" placeholder="Room ID" maxlength="20">
+                    <button id="btn-private-join" class="room-btn primary">Join Private</button>
+                </div>
+            </div>
         </div>
     </div>
 

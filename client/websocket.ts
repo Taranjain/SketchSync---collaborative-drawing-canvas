@@ -5,11 +5,13 @@ export class SocketManager {
     private onMessageCallback: (msg: any) => void = () => {};
     private onConnectionChange: (connected: boolean) => void = () => {};
     private username: string = '';
+    private roomId: string = '';
     
     constructor() {}
     
-    connect(username: string) {
+    connect(username: string, roomId: string) {
         this.username = username;
+        this.roomId = roomId;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}`;
         
@@ -17,12 +19,12 @@ export class SocketManager {
         
         this.ws.onopen = () => {
             this.onConnectionChange(true);
-            this.send({ type: 'join', name: this.username });
+            this.send({ type: 'join', name: this.username, roomId: this.roomId });
         };
         
         this.ws.onclose = () => {
             this.onConnectionChange(false);
-            setTimeout(() => this.connect(this.username), 3000);
+            setTimeout(() => this.connect(this.username, this.roomId), 3000);
         };
         
         this.ws.onmessage = (event) => {

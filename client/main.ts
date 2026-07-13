@@ -4,7 +4,10 @@ import { CanvasManager } from './canvas.js';
 
 const overlay = document.getElementById('join-overlay')!;
 const usernameInput = document.getElementById('username-input') as HTMLInputElement;
-const joinBtn = document.getElementById('join-btn')!;
+const btnPublicA = document.getElementById('btn-public-a')!;
+const btnPublicB = document.getElementById('btn-public-b')!;
+const btnPrivateJoin = document.getElementById('btn-private-join')!;
+const privateRoomInput = document.getElementById('private-room-input') as HTMLInputElement;
 const app = document.getElementById('app')!;
 const statusIndicator = document.getElementById('connection-status')!;
 const userListEl = document.getElementById('user-list')!;
@@ -31,16 +34,30 @@ const socket = new SocketManager();
 const canvas = new CanvasManager(staticCanvas, dynamicCanvas, socket);
 
 function init() {
-    joinBtn.addEventListener('click', () => {
+    const savedName = localStorage.getItem('sketchSyncUsername');
+    if (savedName) {
+        usernameInput.value = savedName;
+    }
+
+    const joinRoom = (roomId: string) => {
         const name = usernameInput.value.trim() || 'Anonymous';
-        socket.connect(name);
+        localStorage.setItem('sketchSyncUsername', name);
+        socket.connect(name, roomId);
         overlay.classList.add('hidden');
         app.classList.remove('hidden');
         canvas.redrawStaticCanvas();
+    };
+
+    btnPublicA.addEventListener('click', () => joinRoom('public-a'));
+    btnPublicB.addEventListener('click', () => joinRoom('public-b'));
+    btnPrivateJoin.addEventListener('click', () => {
+        const roomId = privateRoomInput.value.trim();
+        if (roomId) joinRoom(roomId);
+        else alert('Please enter a Room ID');
     });
 
-    usernameInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') joinBtn.click();
+    privateRoomInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') btnPrivateJoin.click();
     });
 
     setupToolbar();

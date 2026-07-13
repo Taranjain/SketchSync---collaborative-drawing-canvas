@@ -56,4 +56,15 @@ export class RoomManager {
     }
 }
 
-export const defaultRoom = new RoomManager();
+export const rooms: Map<string, RoomManager> = new Map();
+
+// Initialize the default public rooms
+rooms.set('public-a', new RoomManager());
+rooms.set('public-b', new RoomManager());
+
+export function getOrCreateRoom(roomId: string): RoomManager {
+    if (!rooms.has(roomId)) {
+        rooms.set(roomId, new RoomManager());
+    }
+    return rooms.get(roomId)!;
+}

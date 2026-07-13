@@ -4,7 +4,7 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { defaultRoom } from './rooms.js';
+import { getOrCreateRoom } from './rooms.js';
 import { Stroke } from './drawing-state.js';
 import { randomUUID } from 'crypto';
 
@@ -24,41 +24,48 @@ app.use(express.static(clientPath));
 
 wss.on('connection', (ws: WebSocket) => {
     const userId = randomUUID();
+    let currentRoomId: string | null = null;
     
     ws.on('message', (message: string) => {
         try {
             const data = JSON.parse(message.toString());
             
-            switch (data.type) {
-                case 'join': {
-                    const userName = data.name || 'Anonymous';
-                    const user = defaultRoom.addUser(userId, userName, ws);
-                    
-                    ws.send(JSON.stringify({
-                        type: 'init-state',
-                        userId: user.id,
-                        color: user.color,
-                        history: defaultRoom.drawingState.getHistory(),
-                        users: defaultRoom.getAllUsersSafe()
-                    }));
-                    
-                    defaultRoom.broadcast({
-                        type: 'user-joined',
-                        user: { id: user.id, name: user.name, color: user.color }
-                    }, userId);
-                    
-                    defaultRoom.broadcast({
-                        type: 'user-list',
-                        users: defaultRoom.getAllUsersSafe()
-                    });
-                    break;
-                }
+            if (data.type === 'join') {
+                currentRoomId = data.roomId || 'public-a';
+                const currentRoom = getOrCreateRoom(currentRoomId!);
                 
+                const userName = data.name || 'Anonymous';
+                const user = currentRoom.addUser(userId, userName, ws);
+                
+                ws.send(JSON.stringify({
+                    type: 'init-state',
+                    userId: user.id,
+                    color: user.color,
+                    history: currentRoom.drawingState.getHistory(),
+                    users: currentRoom.getAllUsersSafe()
+                }));
+                
+                currentRoom.broadcast({
+                    type: 'user-joined',
+                    user: { id: user.id, name: user.name, color: user.color }
+                }, userId);
+                
+                currentRoom.broadcast({
+                    type: 'user-list',
+                    users: currentRoom.getAllUsersSafe()
+                });
+                return;
+            }
+
+            if (!currentRoomId) return;
+            const currentRoom = getOrCreateRoom(currentRoomId);
+
+            switch (data.type) {
                 case 'draw-start':
                 case 'draw-move':
                 case 'cursor-move': {
                     data.userId = userId;
-                    defaultRoom.broadcast(data, userId);
+                    currentRoom.broadcast(data, userId);
                     break;
                 }
                 
@@ -66,9 +73,9 @@ wss.on('connection', (ws: WebSocket) => {
                     const stroke = data.stroke as Stroke;
                     stroke.userId = userId; 
                     
-                    defaultRoom.drawingState.addStroke(stroke);
+                    currentRoom.drawingState.addStroke(stroke);
                     
-                    defaultRoom.broadcast({
+                    currentRoom.broadcast({
                         type: 'draw-end',
                         userId: userId,
                         stroke: stroke
@@ -77,35 +84,35 @@ wss.on('connection', (ws: WebSocket) => {
                 }
                 
                 case 'undo': {
-                    const undoneStroke = defaultRoom.drawingState.undo();
+                    const undoneStroke = currentRoom.drawingState.undo();
                     if (undoneStroke) {
                         const undoMsg = {
                             type: 'undo-event',
                             strokeId: undoneStroke.id
                         };
-                        defaultRoom.broadcast(undoMsg);
+                        currentRoom.broadcast(undoMsg);
                         ws.send(JSON.stringify(undoMsg));
                     }
                     break;
                 }
                 
                 case 'redo': {
-                    const redoneStroke = defaultRoom.drawingState.redo();
+                    const redoneStroke = currentRoom.drawingState.redo();
                     if (redoneStroke) {
                         const redoMsg = {
                             type: 'redo-event',
                             stroke: redoneStroke
                         };
-                        defaultRoom.broadcast(redoMsg);
+                        currentRoom.broadcast(redoMsg);
                         ws.send(JSON.stringify(redoMsg));
                     }
                     break;
                 }
                 
                 case 'clear': {
-                    defaultRoom.drawingState.clear();
+                    currentRoom.drawingState.clear();
                     const clearMsg = { type: 'clear-event' };
-                    defaultRoom.broadcast(clearMsg);
+                    currentRoom.broadcast(clearMsg);
                     ws.send(JSON.stringify(clearMsg));
                     break;
                 }
@@ -113,8 +120,8 @@ wss.on('connection', (ws: WebSocket) => {
                 case 'erase-stroke': {
                     const strokeId = data.strokeId;
                     if (strokeId) {
-                        defaultRoom.drawingState.removeStroke(strokeId);
-                        defaultRoom.broadcast({
+                        currentRoom.drawingState.removeStroke(strokeId);
+                        currentRoom.broadcast({
                             type: 'erase-stroke-event',
                             strokeId: strokeId
                         }, userId);
@@ -128,17 +135,20 @@ wss.on('connection', (ws: WebSocket) => {
     });
 
     ws.on('close', () => {
-        defaultRoom.removeUser(userId);
-        
-        defaultRoom.broadcast({
-            type: 'user-left',
-            userId: userId
-        });
-        
-        defaultRoom.broadcast({
-            type: 'user-list',
-            users: defaultRoom.getAllUsersSafe()
-        });
+        if (currentRoomId) {
+            const currentRoom = getOrCreateRoom(currentRoomId);
+            currentRoom.removeUser(userId);
+            
+            currentRoom.broadcast({
+                type: 'user-left',
+                userId: userId
+            });
+            
+            currentRoom.broadcast({
+                type: 'user-list',
+                users: currentRoom.getAllUsersSafe()
+            });
+        }
     });
 });
 
