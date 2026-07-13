@@ -60,6 +60,20 @@ function init() {
         if (e.key === 'Enter') btnPrivateJoin.click();
     });
 
+    const btnToggleUsers = document.getElementById('btn-toggle-users')!;
+    const btnLeaveRoom = document.getElementById('btn-leave-room')!;
+    const sidebar = document.querySelector('.sidebar')!;
+
+    btnToggleUsers.addEventListener('click', () => {
+        sidebar.classList.toggle('active');
+    });
+
+    btnLeaveRoom.addEventListener('click', () => {
+        if(confirm("Are you sure you want to leave this room?")) {
+            window.location.reload();
+        }
+    });
+
     setupToolbar();
     setupSocketEvents();
 }

@@ -16,12 +16,22 @@
             <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
             
             <div class="room-options">
-                <button id="btn-public-a" class="room-btn">Join Public Room A</button>
-                <button id="btn-public-b" class="room-btn">Join Public Room B</button>
+                <div class="room-section">
+                    <h3 class="room-section-title">Public Rooms</h3>
+                    <p class="room-section-subtitle">Draw with anyone online</p>
+                    <button id="btn-public-a" class="room-btn">Join Public Room A</button>
+                    <button id="btn-public-b" class="room-btn">Join Public Room B</button>
+                </div>
                 
-                <div class="private-room-container">
-                    <input type="text" id="private-room-input" placeholder="Room ID" maxlength="20">
-                    <button id="btn-private-join" class="room-btn primary">Join Private</button>
+                <div class="room-section-divider">OR</div>
+
+                <div class="room-section">
+                    <h3 class="room-section-title">Private Room</h3>
+                    <p class="room-section-subtitle">Draw with friends using a secret code</p>
+                    <div class="private-room-container">
+                        <input type="text" id="private-room-input" placeholder="Enter Room ID" maxlength="20">
+                        <button id="btn-private-join" class="room-btn primary">Join Private</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -29,6 +39,26 @@
 
     <!-- Main App -->
     <div id="app" class="hidden">
+        <!-- Navbar (Absolute positioned over canvas) -->
+        <header class="navbar glass">
+            <div class="navbar-left">
+                <button class="nav-btn hidden-on-desktop" id="btn-toggle-users" title="Toggle Users">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <span>Users</span>
+                </button>
+                <h2>🎨 SketchSync</h2>
+            </div>
+            <div class="navbar-right">
+                <button class="nav-btn" id="btn-leave-room" title="Change Room">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <span>Leave</span>
+                </button>
+                <button class="nav-btn" id="theme-toggle" title="Toggle Theme">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+            </div>
+        </header>
+
         <!-- Sidebar -->
         <aside class="sidebar glass">
             <div class="sidebar-header">
@@ -115,11 +145,6 @@
                 </button>
             </div>
 
-            <div class="tool-group">
-                <button class="tool-btn" id="theme-toggle" title="Toggle Theme">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-                </button>
-            </div>
         </div>
     </div>
     
