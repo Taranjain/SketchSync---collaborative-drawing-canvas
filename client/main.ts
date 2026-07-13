@@ -65,23 +65,44 @@ function init() {
 }
 
 function setupToolbar() {
-    toolBrush.addEventListener('click', () => {
-        canvas.activeTool = 'brush';
-        toolBrush.classList.add('active');
-        toolEraser.classList.remove('active');
-        eraserOptions.classList.add('hidden');
+    const tools = ['brush', 'eraser', 'shape', 'text'];
+    const eraserOptions = document.getElementById('eraser-options')!;
+    const shapeOptions = document.getElementById('shape-options')!;
+    const eraserModeToggle = document.getElementById('eraser-mode-toggle') as HTMLInputElement;
+    const shapeTypeSelect = document.getElementById('shape-type-select') as HTMLSelectElement;
+    
+    tools.forEach(tool => {
+        document.getElementById(`tool-${tool}`)?.addEventListener('click', (e) => {
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            (e.currentTarget as HTMLElement).classList.add('active');
+            
+            if (tool === 'eraser') {
+                canvas.activeTool = eraserModeToggle.checked ? 'stroke-eraser' : 'eraser';
+                eraserOptions.classList.remove('hidden');
+                shapeOptions.classList.add('hidden');
+            } else if (tool === 'shape') {
+                canvas.activeTool = 'shape';
+                canvas.activeShapeType = shapeTypeSelect.value as any;
+                shapeOptions.classList.remove('hidden');
+                eraserOptions.classList.add('hidden');
+            } else {
+                canvas.activeTool = tool as any;
+                eraserOptions.classList.add('hidden');
+                shapeOptions.classList.add('hidden');
+            }
+        });
     });
 
-    toolEraser.addEventListener('click', () => {
-        canvas.activeTool = eraserModeToggle.checked ? 'stroke-eraser' : 'eraser';
-        toolEraser.classList.add('active');
-        toolBrush.classList.remove('active');
-        eraserOptions.classList.remove('hidden');
+    eraserModeToggle.addEventListener('change', (e) => {
+        if (canvas.activeTool === 'eraser' || canvas.activeTool === 'stroke-eraser') {
+            canvas.activeTool = (e.target as HTMLInputElement).checked ? 'stroke-eraser' : 'eraser';
+        }
     });
-    
-    eraserModeToggle.addEventListener('change', () => {
-        if (toolEraser.classList.contains('active')) {
-            canvas.activeTool = eraserModeToggle.checked ? 'stroke-eraser' : 'eraser';
+
+    shapeTypeSelect.addEventListener('change', (e) => {
+        canvas.activeShapeType = (e.target as HTMLSelectElement).value as any;
+        if (canvas.activeTool !== 'shape') {
+            document.getElementById('tool-shape')?.click();
         }
     });
 

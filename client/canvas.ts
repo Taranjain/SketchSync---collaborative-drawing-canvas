@@ -2,7 +2,8 @@
 import { SocketManager } from './websocket.js';
 
 export interface Point { x: number; y: number; }
-export type Tool = 'brush' | 'eraser' | 'stroke-eraser';
+export type Tool = 'brush' | 'eraser' | 'stroke-eraser' | 'shape' | 'text';
+export type ShapeType = 'rectangle' | 'circle' | 'line';
 
 export interface Stroke {
     id: string;
@@ -11,6 +12,8 @@ export interface Stroke {
     color: string;
     width: number;
     points: Point[];
+    shapeType?: ShapeType;
+    text?: string;
 }
 
 export class CanvasManager {
@@ -35,6 +38,7 @@ export class CanvasManager {
     public users = new Map<string, any>();
     
     public activeTool: Tool = 'brush';
+    public activeShapeType: ShapeType = 'rectangle';
     public activeColor: string = '#000000';
     public activeWidth: number = 5;
     public myUserId: string = '';
@@ -106,17 +110,70 @@ export class CanvasManager {
             this.checkErase(worldPt);
             return;
         }
+
+        if (this.activeTool === 'text') {
+            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            this.isDrawing = false;
+            this.spawnTextInput(e.clientX, e.clientY, worldPt);
+            return;
+        }
         
+        this.isDrawing = true;
         this.currentStroke = {
             id: Math.random().toString(36).substr(2, 9),
             userId: this.myUserId,
             tool: this.activeTool,
             color: this.activeTool === 'eraser' ? '#ffffff' : this.activeColor,
             width: this.activeWidth,
-            points: [worldPt]
+            points: [worldPt],
+            ...(this.activeTool === 'shape' ? { shapeType: this.activeShapeType } : {})
         };
         
         this.socket.send({ type: 'draw-start', stroke: this.currentStroke });
+    }
+
+    private spawnTextInput(clientX: number, clientY: number, worldPt: Point) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'floating-text-input';
+        input.style.left = `${clientX}px`;
+        input.style.top = `${clientY}px`;
+        input.style.fontSize = `${this.activeWidth * 4 * this.scale}px`;
+        input.style.color = this.activeColor;
+        
+        document.body.appendChild(input);
+        
+        // Delay focus to prevent mousedown on canvas from instantly blurring it
+        setTimeout(() => input.focus(), 50);
+
+        let finalized = false;
+        const finalizeText = () => {
+            if (finalized) return;
+            finalized = true;
+            
+            const text = input.value.trim();
+            input.remove();
+            if (text) {
+                const stroke: Stroke = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    userId: this.myUserId,
+                    tool: 'text',
+                    color: this.activeColor,
+                    width: this.activeWidth,
+                    points: [worldPt],
+                    text: text
+                };
+                this.history.push(stroke);
+                this.socket.send({ type: 'draw-end', stroke: stroke });
+                this.renderStroke(this.staticCtx, stroke);
+            }
+        };
+
+        input.addEventListener('blur', finalizeText);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') finalizeText();
+            if (e.key === 'Escape') input.remove();
+        });
     }
     
     private onPointerMove(e: PointerEvent) {
@@ -136,7 +193,11 @@ export class CanvasManager {
             if (this.activeTool === 'stroke-eraser') {
                 this.checkErase(worldPt);
             } else if (this.currentStroke) {
-                this.currentStroke.points.push(worldPt);
+                if (this.activeTool === 'shape') {
+                    this.currentStroke.points[1] = worldPt;
+                } else {
+                    this.currentStroke.points.push(worldPt);
+                }
                 this.socket.send({ type: 'draw-move', point: worldPt, strokeId: this.currentStroke.id });
             }
         } else {
@@ -263,7 +324,11 @@ export class CanvasManager {
     public updateRemoteStroke(userId: string, strokeId: string, point: Point) {
         const stroke = this.activeRemoteStrokes.get(userId);
         if (stroke && stroke.id === strokeId) {
-            stroke.points.push(point);
+            if (stroke.tool === 'shape') {
+                stroke.points[1] = point;
+            } else {
+                stroke.points.push(point);
+            }
         }
     }
     
@@ -313,14 +378,38 @@ export class CanvasManager {
         ctx.strokeStyle = stroke.tool === 'eraser' ? 
             getComputedStyle(document.body).getPropertyValue('--canvas-bg').trim() : 
             stroke.color;
+        ctx.fillStyle = stroke.color;
         ctx.lineWidth = stroke.width;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
+        if (stroke.tool === 'text' && stroke.text) {
+            ctx.font = `${stroke.width * 4}px 'Inter', sans-serif`;
+            ctx.fillText(stroke.text, stroke.points[0].x, stroke.points[0].y + (stroke.width * 4));
+            return;
+        }
+
+        if (stroke.tool === 'shape' && stroke.points.length > 1) {
+            const p1 = stroke.points[0];
+            const p2 = stroke.points[1];
+            
+            if (stroke.shapeType === 'rectangle') {
+                ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+            } else if (stroke.shapeType === 'circle') {
+                const r = Math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2);
+                ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (stroke.shapeType === 'line') {
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+            return;
+        }
+        
         ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
         
         if (stroke.points.length === 1) {
-            // Draw a micro-line to ensure single-click dots are visible
             ctx.lineTo(stroke.points[0].x, stroke.points[0].y + 0.001);
         } else {
             for (let i = 1; i < stroke.points.length; i++) {

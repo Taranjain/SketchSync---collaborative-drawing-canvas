@@ -1,6 +1,7 @@
 // server/drawing-state.ts
 
-export type Tool = 'brush' | 'eraser' | 'stroke-eraser';
+export type Tool = 'brush' | 'eraser' | 'stroke-eraser' | 'shape' | 'text';
+export type ShapeType = 'rectangle' | 'circle' | 'line';
 
 export interface Point {
     x: number;
@@ -14,6 +15,8 @@ export interface Stroke {
     color: string;
     width: number;
     points: Point[];
+    shapeType?: ShapeType;
+    text?: string;
 }
 
 export class DrawingState {

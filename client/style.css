@@ -318,3 +318,32 @@ canvas {
     z-index: 1;
     pointer-events: none; /* Let dynamic canvas handle all events */
 }
+
+/* Floating Text Input */
+.floating-text-input {
+    position: absolute;
+    background: transparent;
+    color: var(--text-color);
+    border: 1px dashed var(--accent);
+    outline: none;
+    padding: 0;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.glass-select {
+    background: var(--glass-bg);
+    color: var(--text-color);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+}
+.glass-select option {
+    background: var(--bg-color);
+    color: var(--text-color);
+}
