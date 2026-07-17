@@ -323,6 +323,7 @@ export class CanvasManager {
     
     public updateRemoteStroke(userId: string, strokeId: string, point: Point) {
         const stroke = this.activeRemoteStrokes.get(userId);
+        this.remoteCursors.set(userId, point);
         if (stroke && stroke.id === strokeId) {
             if (stroke.tool === 'shape') {
                 stroke.points[1] = point;
