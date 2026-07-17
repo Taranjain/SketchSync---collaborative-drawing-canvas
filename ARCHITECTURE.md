@@ -24,118 +24,292 @@
 
 SketchSync follows a client-server architecture with a single Node.js process acting as the authoritative state holder and WebSocket relay. All clients connect directly to the server via native WebSockets (the `ws` library). There is no intermediary message broker, database, or CDN involved at runtime.
 
-```
-┌───────────────────────────────────────────────────────────────────────┐
-│                          Node.js Server                              │
-│                                                                      │
-│  ┌──────────────┐   ┌──────────────────┐   ┌──────────────────────┐  │
-│  │   Express     │   │   WebSocketServer │   │   RoomManager (×N)   │  │
-│  │   (Static     │   │   (ws library)    │   │   ├─ DrawingState    │  │
-│  │    Files)     │   │                   │   │   │  ├─ strokes[]    │  │
-│  └──────────────┘   └──────────────────┘   │   │  └─ redoStack[]  │  │
-│                                             │   ├─ users Map       │  │
-│                                             │   └─ broadcast()     │  │
-│                                             └──────────────────────┘  │
-└───────────────────────────────────────────────────────────────────────┘
-         ▲                    ▲▲▲                        │
-         │ HTTP (index.html,  │││ WebSocket              │
-         │ CSS, JS)           │││ (JSON messages)        │
-         │                    │││                        │
-    ┌────┴────┐          ┌────┴┴┴─────┐                 │
-    │ Browser │          │  Browser(s) │                 │
-    │ (GET /) │          │  (WS conn)  │                 │
-    └─────────┘          └─────────────┘                 │
-                              │                          │
-                    ┌─────────┴─────────┐                │
-                    │                   │                │
-              ┌─────┴──────┐    ┌──────┴──────┐         │
-              │CanvasManager│    │SocketManager│ ◄───────┘
-              │(canvas.ts)  │    │(websocket.ts)│
-              └─────────────┘    └─────────────┘
+```mermaid
+graph TB
+    subgraph BROWSER["Browser (Client)"]
+        HTML["index.html<br/>(Structure)"]
+        CSS["style.css<br/>(Styling)"]
+        TS["TypeScript Files"]
+        
+        subgraph TS
+            MAIN["main.ts<br/>(Glue Code)"]
+            CANVAS["canvas.ts<br/>(Rendering Engine)"]
+            WS["websocket.ts<br/>(Connection Manager)"]
+        end
+        
+        HTML --> MAIN
+        MAIN --> CANVAS
+        MAIN --> WS
+    end
+    
+    subgraph SERVER["Node.js Server"]
+        subgraph FILES["Server Files"]
+            SRV["server.ts<br/>(Entry Point + Handlers)"]
+            ROOM["rooms.ts<br/>(User/Room Management)"]
+            STATE["drawing-state.ts<br/>(Data Types + History)"]
+        end
+        
+        subgraph RUNTIME["Runtime"]
+            EXPRESS["Express<br/>(HTTP + Static Files)"]
+            WSS["WebSocketServer<br/>(Real-Time Comms)"]
+            DRAWSTATE["DrawingState Instance<br/>(Single Source of Truth)"]
+            ROOMMGR["RoomManager Instance<br/>(Connected Users)"]
+        end
+        
+        SRV --> EXPRESS
+        SRV --> WSS
+        SRV --> ROOMMGR
+        SRV --> DRAWSTATE
+        ROOMMGR --> DRAWSTATE
+        STATE --> DRAWSTATE
+        ROOM --> ROOMMGR
+    end
+    
+    BROWSER -- "WebSocket (ws://)" --> SERVER
+    BROWSER -- "HTTP (static files)" --> SERVER
+    
+    style BROWSER fill:#e1f5fe,stroke:#01579b
+    style SERVER fill:#fff3e0,stroke:#e65100
+    style DRAWSTATE fill:#c8e6c9,stroke:#2e7d32
+    style ROOMMGR fill:#c8e6c9,stroke:#2e7d32
 ```
 
 ---
 
 ## Data Flow Diagram
 
-### Drawing Event Flow (User A draws, User B sees it)
+### a. Joining a Room
 
-```
-  User A (Browser)                    Server                     User B (Browser)
-  ─────────────────                   ──────                     ─────────────────
-        │                               │                              │
-  mousedown                             │                              │
-        │                               │                              │
-        ├── draw-start ───────────────► │                              │
-        │   {stroke: {id, tool,         │                              │
-        │    color, width, points}}     ├── draw-start ──────────────► │
-        │                               │   {userId, stroke}           │
-        │                               │                              │
-  mousemove (×N)                        │                              │
-        │                               │                              │
-        ├── draw-move ────────────────► │                              │
-        │   {point, strokeId}           ├── draw-move ───────────────► │
-        │                               │   {userId, point, strokeId}  │
-        │   (repeated per pointermove)  │   (repeated per message)     │
-        │                               │                              │
-  mouseup                               │                              │
-        │                               │                              │
-        ├── draw-end ─────────────────► │                              │
-        │   {stroke: {final data}}      │── addStroke(stroke)          │
-        │                               │                              │
-        │                               ├── draw-end ────────────────► │
-        │                               │   {userId, stroke}           │
-        │                               │                              │
-        │                               │                    finishRemoteStroke()
-        │                               │                    ├─ delete activeRemote
-        │                               │                    ├─ push to history
-        │                               │                    └─ render on static
+**What happens:** User types their name, clicks Join, enters the shared canvas.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant main as main.ts
+    participant ws as websocket.ts
+    participant canvas as canvas.ts
+    participant Server
+    
+    User->>main: Clicks "Join Canvas"
+    main->>main: Reads name from input
+    main->>ws: socket.connect("Alice")
+    ws->>ws: new WebSocket("ws://localhost:3000")
+    ws->>Server: [WebSocket opens]
+    ws->>Server: Sends { type: "join", name: "Alice", roomId:"1" }
+    
+    Server->>Server: Generates userId, assigns color
+    Server->>Server: Creates User, stores in RoomManager.users Map
+    Server-->>ws: Sends init-state msg
+    Server-->>Others: Broadcasts user-joined, user-list
+    
+    ws-->>main: onMessage callback fires with init-state
+    main->>canvas: canvas.myUserId = msg.userId
+    main->>canvas: canvas.setHistory(msg.history)
+    main->>canvas: canvas.redrawStaticCanvas()
+    main->>main: updateUserList(msg.users) → populates sidebar
+    main->>canvas: canvas.users.set(id, userData) for each user
 ```
 
-### Undo Event Flow (User B undoes, all clients update)
+**Files involved:** `main.ts:36-42`, `websocket.ts:14-24`, `server.ts:42-67`, `rooms.ts:34-41`
+
+**Key takeaway:** Joining is a three-step handshake: connect WebSocket → send name → receive full state.
+
+---
+
+### b. Drawing a Stroke
+
+**What happens:** User presses mouse, moves, releases — a complete drawing action.
+
+```mermaid
+sequenceDiagram
+    participant User as You
+    participant canvas as canvas.ts
+    participant ws as websocket.ts
+    participant Server
+    participant Others as Other Clients
+    
+    User->>canvas: pointerdown (left click)
+    canvas->>canvas: toWorld(clientX, clientY) → world coordinates
+    canvas->>canvas: Creates currentStroke { id, tool, color, width, points: [firstPoint] }
+    canvas->>ws: send({ type: "draw-start", stroke })
+    ws->>Server: send over WebSocket
+    Server-->>Others: broadcast draw-start (excludes sender)
+    
+    loop Every pointermove while drawing
+        User->>canvas: pointermove
+        canvas->>canvas: toWorld(clientX, clientY) → worldPt
+        canvas->>canvas: currentStroke.points.push(worldPt)
+        canvas->>ws: send({ type: "draw-move", point, strokeId })
+        ws->>Server: send over WebSocket
+        Server-->>Others: broadcast draw-move
+    end
+    
+    User->>canvas: pointerup
+    canvas->>canvas: isDrawing = false
+    canvas->>canvas: history.push(currentStroke)
+    canvas->>canvas: renderStroke(staticCtx, currentStroke) → renders on static canvas
+    canvas->>ws: send({ type: "draw-end", stroke: currentStroke })
+    ws->>Server: send over WebSocket
+    Server->>Server: drawingState.addStroke(stroke) → saves to history
+    Server-->>Others: broadcast draw-end with finalized stroke
+    canvas->>canvas: currentStroke = null
+```
+
+
+
+---
+
+### c. Seeing Other Users Draw Live
+
+**What happens:** Another user's stroke appears on your screen in real-time, point by point.
+
+```mermaid
+sequenceDiagram
+    participant Remote as Remote User's Canvas
+    participant Server
+    participant ws as Your websocket.ts
+    participant main as Your main.ts
+    participant canvas as Your canvas.ts
+    
+    Remote->>Server: draw-start (stroke data)
+    Server-->>ws: draw-start with userId
+    ws-->>main: onMessage({ type: "draw-start", userId, stroke })
+    main->>canvas: canvas.addRemoteStrokeStart(userId, stroke)
+    canvas->>canvas: activeRemoteStrokes.set(userId, stroke)
+    
+    Remote->>Server: draw-move (point, strokeId)
+    Server-->>ws: draw-move with userId
+    ws-->>main: onMessage({ type: "draw-move", userId, point, strokeId })
+    main->>canvas: canvas.updateRemoteStroke(userId, strokeId, point)
+    canvas->>canvas: stroke.points.push(point)
+    
+    Note over canvas: IN THE RENDER LOOP (60fps):
+    Note over canvas: for each stroke in activeRemoteStrokes:
+    Note over canvas:   renderStroke(dynamicCtx, stroke)
+    Note over canvas: This shows the PARTIAL stroke updating every frame
+    
+    Remote->>Server: draw-end (final stroke)
+    Server->>Server: drawingState.addStroke(stroke)
+    Server-->>ws: draw-end with stroke
+    ws-->>main: onMessage({ type: "draw-end", userId, stroke })
+    main->>canvas: canvas.finishRemoteStroke(userId, stroke)
+    canvas->>canvas: activeRemoteStrokes.delete(userId)
+    canvas->>canvas: history.push(stroke)
+    canvas->>canvas: renderStroke(staticCtx, stroke) → now ON STATIC CANVAS
+```
+
+**Key concept:** The dynamic canvas renders the in-progress stroke. The static canvas gets it only when it's finished. This separation is the performance secret of the app.
+
+---
+
+
+
+### d. Zoom & Pan
+
+**Zoom** — Two ways to zoom:
+1. **Ctrl/Cmd + Mouse Wheel:** Zooms towards the mouse cursor position
+2. **Toolbar buttons (+/-):** Zooms towards center of screen
+
+**Pan** — Three ways to pan:
+1. **Right-click + drag**
+2. **Middle-click + drag**
+3. **Shift + left-click + drag**
+4. **Mouse wheel (without Ctrl)**
+
+```mermaid
+flowchart LR
+    subgraph ZOOM["Zoom (Ctrl+Wheel or Buttons)"]
+        A["Wheel event fires"] --> B{"ctrlKey or metaKey?"}
+        B -->|Yes| C["Calculate newScale<br/>clamped 0.1 - 5"]
+        C --> D["offsetX = mouseX - (mouseX - offsetX) * (newScale/scale)"]
+        D --> E["offsetY = mouseY - (mouseY - offsetY) * (newScale/scale)"]
+        E --> F["scale = newScale"]
+        F --> G["redrawStaticCanvas()"]
+    end
+    
+    subgraph PAN["Pan (Drag or Scroll)"]
+        H["User right-click drags"] --> I["isPanning = true"]
+        I --> J["offsetX += mouseDeltaX"]
+        J --> K["offsetY += mouseDeltaY"]
+        K --> L["redrawStaticCanvas()"]
+        
+        M["Mouse wheel scroll"] --> N["offsetX -= deltaX"]
+        N --> O["offsetY -= deltaY"]
+        O --> L
+    end
+```
+
+**The zoom math explained:**
+
+When you zoom with Ctrl+Wheel, the point under your mouse cursor should stay in place. This is achieved with:
 
 ```
-  User B (Browser)                    Server                     User A (Browser)
-  ─────────────────                   ──────                     ─────────────────
-        │                               │                              │
-  click Undo                            │                              │
-        │                               │                              │
-        ├── undo ─────────────────────► │                              │
-        │   {type: "undo"}              │── drawingState.undo()        │
-        │                               │   pop last stroke            │
-        │                               │   push to redoStack          │
-        │                               │                              │
-        │  ◄── undo-event ──────────── │                              │
-        │      {strokeId}               ├── undo-event ──────────────► │
-        │                               │   {strokeId}                 │
-  removeStroke(strokeId)                │                   removeStroke(strokeId)
-  redrawStaticCanvas()                  │                   redrawStaticCanvas()
+newOffset = mouseScreenPos - (mouseScreenPos - oldOffset) × (newScale / oldScale)
 ```
 
-### New User Joins (State Synchronization)
+**Example:** Say mouse is at screen position (200, 200), current offset is (100, 100), scale is 1.0.
+- The world point under the mouse is: `worldX = (200 - 100) / 1.0 = 100`
+- User zooms in to scale 2.0
+- To keep world point 100 under screen 200: `newOffset = 200 - (200 - 100) × (2.0 / 1.0) = 200 - 200 = 0`
+- So offset moves from (100, 100) to (0, 0) — the camera shifts to keep that world point fixed
 
+---
+
+### e. Undo / Redo
+
+**Undo**: Removes the LAST stroke (by anyone — it's global).
+
+**Redo**: Restores the most recently undone stroke.
+
+```mermaid
+sequenceDiagram
+    participant A as Client A (undo initiator)
+    participant S as Server
+    participant B as Client B
+    
+    A->>S: { type: "undo" }
+    S->>S: drawingState.undo()
+    S->>S: Pops activeStrokes[last], pushes to redoStack
+    S-->>A: undo-event { strokeId }
+    S-->>B: undo-event { strokeId } (same broadcast)
+    
+    A->>A: canvas.removeStroke(strokeId)
+    A->>A: history.filter(s => s.id !== strokeId)
+    A->>A: redrawStaticCanvas() ← complete redraw without stroke
+    
+    B->>B: canvas.removeStroke(strokeId)
+    B->>B: same filter + redraw
 ```
-  New User (Browser)                  Server                     Existing Users
-  ─────────────────                   ──────                     ───────────────
-        │                               │                              │
-  WebSocket open                        │                              │
-        │                               │                              │
-        ├── join ─────────────────────► │                              │
-        │   {name, roomId}              │── addUser(id, name, ws)      │
-        │                               │── getHistory()               │
-        │                               │                              │
-        │  ◄── init-state ──────────── │                              │
-        │      {userId, color,          │                              │
-        │       history: Stroke[],      │                              │
-        │       users: User[]}          ├── user-joined ─────────────► │
-        │                               │   {user: {id,name,color}}    │
-  setHistory(history)                   │                              │
-  updateUserList(users)                 ├── user-list ────────────────► │
-        │                               │   {users: User[]}            │
-        │                               │                     updateUserList()
+
+**Important:** 
+- Undo is **global** — anyone can undo anyone's stroke
+- The `redoStack` is **cleared** when a new stroke is drawn (standard undo/redo behavior)
+- The ordered `activeStrokes[]` array ensures deterministic visual order
+
+---
+### f. User List Sidebar
+
+**How it works:**
+
+1. On `init-state` and `user-list` messages, `updateUserList(users)` is called
+2. The function clears both the HTML list and the canvas's `users` Map
+3. It re-populates both with the fresh user data
+4. Each user gets a `<li>` with a colored dot and name
+
+```mermaid
+flowchart LR
+    A["Server sends user-list"] --> B["main.ts: updateUserList(users)"]
+    B --> C["canvas.users.clear()"]
+    B --> D["userListEl.innerHTML = ''"]
+    B --> E["Loop through each user"]
+    E --> F["canvas.users.set(id, user)"]
+    E --> G["Create <li> with color dot + name"]
+    G --> H["Append to #user-list <ul>"]
+    F --> I["Canvas uses user data for cursor labels"]
 ```
 
 ---
+
 
 ## Component Architecture
 
